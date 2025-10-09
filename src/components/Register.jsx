@@ -67,7 +67,7 @@ function Register() {
 
             <div className="bg-white bg-opacity-95 p-4 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
                 <div className="text-center mb-4 sm:mb-6">
-                    <h1 className="text-xl sm:text-3xl font-bold text-emerald-800 mb-1 sm:mb-2">Join Aether</h1>
+                    <h1 className="text-xl sm:text-3xl font-bold text-emerald-800 mb-1 sm:mb-2">Join EarlyMind</h1>
                     <p className="text-stone-600 text-xs sm:text-base">Create your account to get started</p>
                 </div>
 
