@@ -34,7 +34,7 @@ function Login() {
                 className="absolute top-4 left-4 text-black hover:text-gray-700 transition-colors font-medium drop-shadow-md bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded-md border border-black border-opacity-20 flex items-center gap-2"
             >
                 <ArrowLeft className="w-4 h-4" />
-                Back to Home
+                Home
             </Link>
 
             <div className="bg-white bg-opacity-95 p-4 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">

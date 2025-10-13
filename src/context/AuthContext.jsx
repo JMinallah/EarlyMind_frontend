@@ -40,13 +40,18 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const register = async ({ email, password, name }) => {
-        const account = await authService.createAccount({ email, password, name });
-        if (account) {
-            const userData = await authService.getCurrentUser();
-            setUser(userData);
-            return { success: true };
-        }
+    const register = async ({ email, password, name, userType }) => {
+        // Create the user account with the userType passed as a parameter
+        const response = await authService.createAccount({
+            email,
+            password,
+            name,
+            userType
+        });
+        
+        // Log in the user after registration is handled inside createAccount in auth.js
+        
+        return response;
     };
 
     const logout = async () => {
