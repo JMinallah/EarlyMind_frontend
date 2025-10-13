@@ -27,7 +27,7 @@ function Login() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-r from-emerald-500 to-teal-600 bg-cover bg-center bg-no-repeat bg-fixed flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-r from-earlymind-teal-light to-earlymind-teal-dark bg-cover bg-center bg-no-repeat bg-fixed flex items-center justify-center p-4">
             {/* Back to Home Button */}
             <Link 
                 to="/" 
@@ -39,7 +39,7 @@ function Login() {
 
             <div className="bg-white bg-opacity-95 p-4 sm:p-8 rounded-lg shadow-lg w-full max-w-sm sm:max-w-md">
                 <div className="text-center mb-4 sm:mb-6">
-                    <h1 className="text-xl sm:text-3xl font-bold text-emerald-800 mb-1 sm:mb-2">Welcome Back</h1>
+                    <h1 className="text-xl sm:text-3xl font-bold text-earlymind-teal-dark mb-1 sm:mb-2">Welcome Back</h1>
                     <p className="text-stone-600 text-xs sm:text-base">Sign in to your EarlyMInd account</p>
                 </div>
 
@@ -58,7 +58,7 @@ function Login() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
-                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm sm:text-base"
+                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-earlymind-teal focus:border-transparent text-sm sm:text-base"
                                 placeholder="Enter your email"
                             />
                         </div>
@@ -78,7 +78,7 @@ function Login() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
-                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm sm:text-base"
+                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-earlymind-teal focus:border-transparent text-sm sm:text-base"
                                 placeholder="Enter your password"
                             />
                         </div>
