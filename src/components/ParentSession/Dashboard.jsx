@@ -173,13 +173,48 @@ function Dashboard() {
             </div>
             
             <div className="p-4">
-              {/* Placeholder for no children */}
-              <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+              {/* Placeholder for no children - Hidden for now to show example profile */}
+              <div className="hidden text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
                 <User className="h-12 w-12 mx-auto text-gray-300 mb-2" />
                 <p className="text-gray-500">No child profiles yet</p>
-                <button className="mt-3 px-4 py-2 bg-earlymind-yellow text-white rounded-md text-sm hover:bg-earlymind-yellow-lighter transition-colors">
+                <button className="mt-3 px-4 py-2 bg-earlymind-yellow text-white rounded-md text-sm hover:bg-earlymind-yellow-dark transition-colors">
                   Add Child Profile
                 </button>
+              </div>
+              
+              {/* Example Child Profile Card - Visible for testing */}
+              <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+                <div className="flex items-center p-3 border-b border-gray-100">
+                  <div className="bg-earlymind-teal-lighter/20 rounded-full h-10 w-10 flex items-center justify-center mr-3">
+                    <span className="text-earlymind-teal font-bold">S</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Sarah</h4>
+                    <p className="text-xs text-gray-500">Age: 4 years</p>
+                  </div>
+                </div>
+                <div className="p-3 text-sm">
+                  <div className="flex justify-between mb-1">
+                    <span>Development Score:</span>
+                    <span className="font-medium">87/100</span>
+                  </div>
+                  <div className="flex justify-between mb-1">
+                    <span>Activities Completed:</span>
+                    <span className="font-medium">12</span>
+                  </div>
+                  <div className="flex justify-between mb-3">
+                    <span>Next Assessment:</span>
+                    <span className="font-medium">Oct 20</span>
+                  </div>
+                  <div className="space-y-2">
+                    <a href="/child-session" className="w-full mt-1 px-3 py-2 bg-earlymind-yellow text-white rounded-md text-sm font-medium hover:bg-earlymind-yellow-dark transition-colors flex items-center justify-center">
+                      Start Session
+                    </a>
+                    <button className="w-full px-3 py-2 bg-earlymind-teal-lighter/20 text-earlymind-teal rounded text-sm hover:bg-earlymind-teal-lighter/30 transition-colors">
+                      View Profile
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

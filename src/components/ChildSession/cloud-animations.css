@@ -1,0 +1,54 @@
+/* Additional cloud animations and effects */
+
+/* A subtle pulsing effect for the Milo character */
+@keyframes characterPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Apply the pulse animation to the Milo character */
+.milo-character {
+  animation: characterPulse 5s ease-in-out infinite;
+}
+
+/* Decorative cloud animations */
+@keyframes floatingCloud {
+  0% { transform: translateX(0px); }
+  50% { transform: translateX(10px); }
+  100% { transform: translateX(0px); }
+}
+
+/* Apply to the decorative clouds */
+.decorative-cloud {
+  animation: floatingCloud 8s ease-in-out infinite;
+  transition: opacity 0.5s ease;
+}
+
+/* Apply different animation delays */
+.decorative-cloud:nth-child(odd) {
+  animation-delay: 1s;
+}
+
+.decorative-cloud:nth-child(3n) {
+  animation-delay: 2.5s;
+  animation-direction: reverse;
+}
+
+.decorative-cloud:nth-child(3n+1) {
+  animation-delay: 4s;
+}
+
+/* Rainbow effect on hover over bubbles */
+@keyframes rainbowBorder {
+  0% { border-color: #ff9999; }
+  25% { border-color: #ffdd99; }
+  50% { border-color: #99ff99; }
+  75% { border-color: #9999ff; }
+  100% { border-color: #ff99ff; }
+}
+
+/* Only apply rainbow effect on hover */
+.cloud-bubble:hover {
+  animation: rainbowBorder 3s linear infinite;
+}

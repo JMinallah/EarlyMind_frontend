@@ -1,0 +1,200 @@
+/* Enhanced cloud-shaped container styling - Responsive */
+.cloud-container {
+  position: relative;
+  background: linear-gradient(to bottom, rgba(230, 243, 255, 0.9), rgba(255, 255, 255, 0.9));
+  border-radius: 25px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(100, 180, 255, 0.3);
+  overflow: hidden;
+  border: 3px solid #f0f8ff;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Desktop styles */
+@media (min-width: 768px) {
+  .cloud-container {
+    border-radius: 30px;
+    width: 60%;
+    margin-right: auto;
+  }
+}
+
+/* Cloud puffs to create the cloud shape */
+.cloud-container::before,
+.cloud-container::after,
+.cloud-puff {
+  content: "";
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Top puffs - Mobile and Desktop */
+.cloud-container::before {
+  width: 40%;
+  height: 30px;
+  top: -15px;
+  left: 10%;
+}
+
+.cloud-container::after {
+  width: 30%;
+  height: 25px;
+  top: -12px;
+  right: 15%;
+}
+
+/* Left side puffs - Mobile */
+.cloud-puff-left-top {
+  width: 40px;
+  height: 40px;
+  top: 5%;
+  left: -20px;
+}
+
+.cloud-puff-left-middle {
+  width: 35px;
+  height: 35px;
+  top: 40%;
+  left: -18px;
+}
+
+.cloud-puff-left-bottom {
+  width: 38px;
+  height: 38px;
+  bottom: 10%;
+  left: -19px;
+}
+
+/* Right side puffs - Mobile */
+.cloud-puff-right-top {
+  width: 42px;
+  height: 42px;
+  top: 8%;
+  right: -21px;
+}
+
+.cloud-puff-right-middle {
+  width: 36px;
+  height: 36px;
+  top: 45%;
+  right: -18px;
+}
+
+.cloud-puff-right-bottom {
+  width: 40px;
+  height: 40px;
+  bottom: 12%;
+  right: -20px;
+}
+
+/* Bottom puffs - Mobile */
+.cloud-puff-bottom-left {
+  width: 35%;
+  height: 28px;
+  bottom: -14px;
+  left: 12%;
+}
+
+.cloud-puff-bottom-right {
+  width: 28%;
+  height: 22px;
+  bottom: -11px;
+  right: 18%;
+}
+
+/* Desktop styles for puffs */
+@media (min-width: 768px) {
+  .cloud-container::before {
+    height: 40px;
+    top: -20px;
+  }
+
+  .cloud-container::after {
+    height: 30px;
+    top: -15px;
+  }
+
+  .cloud-puff-left-top {
+    width: 50px;
+    height: 50px;
+    left: -25px;
+  }
+
+  .cloud-puff-left-middle {
+    width: 40px;
+    height: 40px;
+    left: -20px;
+  }
+
+  .cloud-puff-left-bottom {
+    width: 45px;
+    height: 45px;
+    left: -22px;
+  }
+
+  .cloud-puff-right-top {
+    width: 48px;
+    height: 48px;
+    right: -24px;
+  }
+
+  .cloud-puff-right-middle {
+    width: 42px;
+    height: 42px;
+    right: -21px;
+  }
+
+  .cloud-puff-right-bottom {
+    width: 46px;
+    height: 46px;
+    right: -23px;
+  }
+
+  .cloud-puff-bottom-left {
+    height: 35px;
+    bottom: -18px;
+  }
+
+  .cloud-puff-bottom-right {
+    height: 28px;
+    bottom: -14px;
+  }
+}
+
+/* Add a subtle animation to the entire cloud container */
+@keyframes floatingContainer {
+  0% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-6px) rotate(0.5deg); }
+  66% { transform: translateY(-3px) rotate(-0.5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.cloud-container {
+  animation: floatingContainer 12s ease-in-out infinite;
+}
+
+/* Content area inside cloud */
+.cloud-content {
+  position: relative;
+  z-index: 5;
+  height: 100%;
+  width: 100%;
+  padding: 5px;
+}
+
+/* Additional cloud shine effect */
+.cloud-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
+  border-radius: 30px 30px 100px 100px;
+  z-index: 1;
+  pointer-events: none;
+}

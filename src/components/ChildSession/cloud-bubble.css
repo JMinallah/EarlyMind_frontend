@@ -1,0 +1,81 @@
+/* Enhanced Cloud-like speech bubble styling */
+.cloud-bubble {
+  position: relative;
+  border-radius: 25px;
+  min-width: 80px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Hover effect for interactivity */
+.cloud-bubble:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.18);
+}
+
+/* Base bubble cloud puffs */
+.cloud-bubble::before,
+.cloud-bubble::after {
+  content: "";
+  position: absolute;
+  background: inherit;
+  border-radius: 50%;
+}
+
+/* Top left puff */
+.cloud-bubble::before {
+  height: 20px;
+  width: 20px;
+  top: -8px;
+  left: 15px;
+}
+
+/* Top right puff */
+.cloud-bubble::after {
+  height: 15px;
+  width: 15px;
+  top: -5px;
+  right: 20px;
+}
+
+/* Custom styling for Milo's yellow clouds */
+.bg-earlymind-yellow::before {
+  box-shadow: -2px -2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.bg-earlymind-yellow::after {
+  box-shadow: 2px -2px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* Custom styling for Child's teal clouds */
+.bg-earlymind-teal::before {
+  box-shadow: -2px -2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.bg-earlymind-teal::after {
+  box-shadow: 2px -2px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* Enhanced subtle animation for floating effect */
+@keyframes floatingBubble {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(0.5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.cloud-bubble {
+  animation: floatingBubble 4s ease-in-out infinite;
+}
+
+/* Stagger the animations so they don't all move together */
+.cloud-bubble:nth-child(odd) {
+  animation-delay: 0.5s;
+}
+
+.cloud-bubble:nth-child(3n) {
+  animation-delay: 1.2s;
+}
+
+.cloud-bubble:nth-child(3n+1) {
+  animation-delay: 1.8s;
+}

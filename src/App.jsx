@@ -9,6 +9,7 @@ const Login = lazy(() => import('./components/Login'))
 const Register = lazy(() => import('./components/Register'))
 const Welcome = lazy(() => import('./components/Welcome'))
 const Dashboard = lazy(() => import('./components/ParentSession/Dashboard'))
+const ChildSession = lazy(() => import('./components/ChildSession/ChildSession'))
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -48,6 +49,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/child-session" 
+          element={
+            <ProtectedRoute>
+              <ChildSession />
             </ProtectedRoute>
           } 
         />
