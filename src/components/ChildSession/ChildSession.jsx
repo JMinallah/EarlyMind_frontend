@@ -309,7 +309,7 @@ function ChildSession() {
           </div>
           
           {/* Desktop: Microphone Button and text directly below character */}
-          <div className="hidden md:block mt-6 flex flex-col items-center">
+          <div className="hidden md:block mt-6 flex-col items-center">
             <motion.button
               onClick={handleMicClick}
               whileTap={{ scale: 0.95 }}
