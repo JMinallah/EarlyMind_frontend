@@ -1,0 +1,67 @@
+/* Custom scrollbar styles for chat containers */
+
+/* Mobile chat container scrollbar */
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #14b8a6 #f1f5f9;
+}
+
+.chat-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: #14b8a6;
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #0d9488;
+}
+
+/* Desktop cloud container scrollbar */
+.cloud-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #fbbf24 transparent;
+}
+
+.cloud-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cloud-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cloud-scrollbar::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cloud-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
+}
+
+/* Smooth scrolling for both containers */
+.chat-scrollbar,
+.cloud-scrollbar {
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar on mobile devices when not actively scrolling */
+@media (max-width: 768px) {
+  .chat-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .chat-scrollbar::-webkit-scrollbar-thumb {
+    border: 1px solid #f1f5f9;
+  }
+}

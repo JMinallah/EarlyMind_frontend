@@ -11,6 +11,7 @@ import './cloud-bubble.css'
 import './cloud-animations.css'
 import './cloud-container.css'
 import './cloud-background.css'
+import './chat-scrollbar.css'
 
 function ChildSession() {
   const [isListening, setIsListening] = useState(false)
@@ -330,7 +331,7 @@ function ChildSession() {
 
       {/* Mobile Chat Container - Full Width */}
       <div className="md:hidden w-full px-4 pt-4 pb-6 relative z-10">
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 min-h-80 max-h-96 overflow-y-auto mx-auto max-w-4xl">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 min-h-80 max-h-96 overflow-y-auto mx-auto max-w-4xl chat-scrollbar">
           <div className="space-y-4">
             {conversation.map((item, index) => (
               <div key={index} className={`flex w-full ${item.speaker === 'milo' ? 'justify-start' : 'justify-end'}`}>
@@ -386,7 +387,7 @@ function ChildSession() {
           <div className="cloud-puff cloud-puff-bottom-right"></div>
           
           {/* Conversation content area */}
-          <div className="cloud-content overflow-y-auto h-full pb-2 px-1">
+          <div className="cloud-content overflow-y-auto h-full pb-2 px-1 cloud-scrollbar">
             <div className="space-y-6 relative z-10">
               {conversation.map((item, index) => (
                 <ChatBubble
