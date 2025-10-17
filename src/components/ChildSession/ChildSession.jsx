@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Mic, MicOff, LogOut, Home, Lock, Check } from 'lucide-react'
+import { Mic, MicOff, LogOut, Home, Check } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import MiloAvatar from './MiloAvatar'
+import ChatBubble from './ChatBubble'
 
 // Cloud CSS styles
 import './cloud-bubble.css'
@@ -20,7 +21,17 @@ function ChildSession() {
   const [tapCount, setTapCount] = useState(0)
   const [pinInput, setPinInput] = useState('')
   const [showPinModal, setShowPinModal] = useState(false)
-  const parentPin = '1234' // This would ideally come from a secure context or parent setup
+  
+  // Milo Avatar state
+  const [isThinking, setIsThinking] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [loadingResponse, setLoadingResponse] = useState(false)
+  const [error, setError] = useState('')
+  const [conversationHistory, setConversationHistory] = useState([])
+  const [testMessage, setTestMessage] = useState('')
+  
+  const parentPin = '1234'
   const tapTimeout = useRef(null)
   const { logout } = useAuth()
   const navigate = useNavigate()
@@ -31,56 +42,131 @@ function ChildSession() {
     conversationEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation]);
 
-  const handleMicClick = () => {
-    // Toggle the mic state
+  // Function to send prompt to backend
+  const sendToBackend = async (prompt) => {
+    setLoadingResponse(true);
+    setError("");
+
+    try {
+      const response = await fetch("http://localhost:5000/api/ask-milo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Add to conversation history
+      setConversationHistory(prev => [
+        ...prev,
+        { type: 'user', text: prompt, timestamp: new Date() },
+        { type: 'assistant', text: data.reply, timestamp: new Date() }
+      ]);
+      
+      // Add Milo's response to conversation display
+      setConversation(prev => [...prev, { 
+        speaker: 'milo', 
+        message: data.reply 
+      }])
+      
+      console.log("Milo response:", data.reply);
+      
+      return data.reply;
+    } catch (err) {
+      console.error("Backend API error:", err);
+      setError(`Backend error: ${err.message}`);
+      
+      // Add error message to conversation
+      setConversation(prev => [...prev, { 
+        speaker: 'milo', 
+        message: "I'm sorry, I'm having trouble connecting right now. Could you try again?" 
+      }])
+      
+      throw err;
+    } finally {
+      setLoadingResponse(false);
+    }
+  };
+
+  const handleMicClick = async () => {
+    // Toggle listening state
     setIsListening(!isListening)
     
-    // Simulate a response for demo purposes
     if (!isListening) {
-      // Add user message after a short delay (simulating speech recognition)
-      setTimeout(() => {
-        setConversation(prevConversation => [...prevConversation, { 
-          speaker: 'child', 
-          message: 'I\'m feeling happy today!' 
-        }])
+      // Simulate voice input for demo (in real app this would come from speech recognition)
+      setIsRecording(true)
+      
+      // Simulate processing time
+      setTimeout(async () => {
+        setIsRecording(false)
+        setIsThinking(true)
         
-        // Add Milo's response after another delay
-        setTimeout(() => {
-          setConversation(prevConversation => [...prevConversation, 
-            { speaker: 'milo', message: 'That\'s wonderful! Would you like to play a game or hear a story?' }
-          ])
+        // Simulate different user messages for demo
+        const demoMessages = [
+          "I'm feeling happy today!",
+          "Can you tell me a story?",
+          "I want to play a game!",
+          "I had a good day at school",
+          "I'm excited about my birthday",
+          "Can we talk about animals?"
+        ]
+        const userMessage = demoMessages[Math.floor(Math.random() * demoMessages.length)]
+        
+        // Add user message to conversation
+        setConversation(prev => [...prev, { 
+          speaker: 'child', 
+          message: userMessage 
+        }])
+
+        try {
+          // Get response from backend
+          await sendToBackend(userMessage)
+
+          // Set Milo to speaking state
+          setIsThinking(false)
+          setIsSpeaking(true)
+          
+          // Simulate speaking time
+          setTimeout(() => {
+            setIsSpeaking(false)
+            setIsListening(false)
+          }, 3000)
+
+        } catch (error) {
+          console.error('Error getting response:', error)
+          setIsThinking(false)
           setIsListening(false)
-        }, 2000)
-      }, 1500)
+        }
+      }, 2000)
     }
   }
 
   const handleLogout = async () => {
     try {
       await logout()
-      // Navigation is handled by the protected route
     } catch (error) {
       console.error('Logout error:', error)
     }
   }
   
-  // Handle the special tap pattern in the corner to activate parent mode
   const handleCornerTap = () => {
-    // Clear any existing timeout
     if (tapTimeout.current) {
       clearTimeout(tapTimeout.current)
     }
     
-    // Increment tap count
     setTapCount(prevCount => prevCount + 1)
     
-    // Set timeout to reset tap count if not tapped quickly enough
     tapTimeout.current = setTimeout(() => {
       setTapCount(0)
-    }, 2000) // Reset after 2 seconds of inactivity
+    }, 2000)
     
-    // Check if we've reached 5 taps to activate pin modal
-    if (tapCount === 4) { // 4 + 1 = 5 taps
+    if (tapCount === 4) {
       setShowPinModal(true)
       setTapCount(0)
       if (tapTimeout.current) {
@@ -89,7 +175,6 @@ function ChildSession() {
     }
   }
   
-  // Handle PIN verification
   const handlePinSubmit = (e) => {
     e.preventDefault()
     if (pinInput === parentPin) {
@@ -97,14 +182,39 @@ function ChildSession() {
       setShowPinModal(false)
       setPinInput('')
     } else {
-      // Show error animation or message
       setPinInput('')
     }
   }
   
-  // Handle exiting parent mode
   const handleExitParentMode = () => {
     setParentModeActive(false)
+  }
+
+  const handleTestMessage = async (e) => {
+    e.preventDefault()
+    if (!testMessage.trim()) return
+
+    setIsThinking(true)
+    
+    // Add user message to conversation
+    setConversation(prev => [...prev, { 
+      speaker: 'child', 
+      message: testMessage 
+    }])
+
+    try {
+      await sendToBackend(testMessage)
+      setIsSpeaking(true)
+      
+      setTimeout(() => {
+        setIsSpeaking(false)
+      }, 3000)
+    } catch (error) {
+      console.error('Error:', error)
+    } finally {
+      setIsThinking(false)
+      setTestMessage('')
+    }
   }
 
   return (
@@ -119,7 +229,7 @@ function ChildSession() {
         aria-hidden="true"
       ></div>
       
-      {/* Parent Mode Overlay - Only visible when activated */}
+      {/* Parent Mode Overlay */}
       <AnimatePresence>
         {parentModeActive && (
           <motion.div
@@ -218,97 +328,106 @@ function ChildSession() {
         )}
       </AnimatePresence>
 
-      <div className="container mx-auto px-4 pt-10 pb-24 md:pt-12 md:pb-8 flex flex-col md:flex-row md:items-start md:justify-start relative z-10">
-        {/* Parent Mode Indicator - Only visible when active */}
+      {/* Mobile Chat Container - Full Width */}
+      <div className="md:hidden w-full px-4 pt-4 pb-6 relative z-10">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 min-h-80 max-h-96 overflow-y-auto mx-auto max-w-4xl">
+          <div className="space-y-4">
+            {conversation.map((item, index) => (
+              <div key={index} className={`flex w-full ${item.speaker === 'milo' ? 'justify-start' : 'justify-end'}`}>
+                <div className={`max-w-[92%] min-w-[200px] p-4 rounded-2xl shadow-sm ${
+                  item.speaker === 'milo' 
+                    ? 'bg-yellow-100 border-2 border-yellow-300 text-gray-800' 
+                    : 'bg-teal-100 border-2 border-teal-300 text-gray-800'
+                }`}>
+                  <p className="text-base leading-relaxed">{item.message}</p>
+                </div>
+              </div>
+            ))}
+            {loadingResponse && (
+              <div className="flex justify-start">
+                <div className="bg-yellow-100 rounded-2xl px-4 py-3 text-gray-600 border-2 border-yellow-300">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-pulse">🤔</div>
+                    <span>Milo is thinking...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {error && (
+              <div className="flex justify-center">
+                <div className="bg-red-100 rounded-2xl px-4 py-3 text-red-600 text-sm border-2 border-red-300">
+                  {error}
+                </div>
+              </div>
+            )}
+            <div ref={conversationEndRef} />
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-2 md:px-4 pt-4 md:pt-10 pb-24 md:pb-8 flex flex-col md:flex-row md:items-start md:justify-start relative z-10">
+        {/* Parent Mode Indicator */}
         {parentModeActive && (
           <div className="absolute top-0 left-1/2 transform -translate-x-1/2 bg-earlymind-teal text-white text-xs px-3 py-1 rounded-b-md z-50 shadow-md">
             Parent Mode Active
           </div>
         )}
         
-        {/* Cloud-Shaped Container - Desktop Only */}
-        <div className="hidden md:block cloud-container w-full max-w-md mb-4 p-6 h-80 overflow-hidden relative mx-0 ml-8">
-          {/* Cloud puffs to create the cloud shape */}
+  {/* Cloud-Shaped Container - Desktop Only */}
+  <div className="hidden md:block cloud-container md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mb-4 p-6 md:h-[28rem] lg:h-[32rem] overflow-hidden relative mx-0 ml-8">
+          {/* Cloud puffs */}
           <div className="cloud-puff cloud-puff-left-top"></div>
           <div className="cloud-puff cloud-puff-left-middle"></div>
           <div className="cloud-puff cloud-puff-left-bottom"></div>
-          
           <div className="cloud-puff cloud-puff-right-top"></div>
           <div className="cloud-puff cloud-puff-right-middle"></div>
           <div className="cloud-puff cloud-puff-right-bottom"></div>
-          
           <div className="cloud-puff cloud-puff-bottom-left"></div>
           <div className="cloud-puff cloud-puff-bottom-right"></div>
           
-          {/* Conversation content area - Desktop only */}
+          {/* Conversation content area */}
           <div className="cloud-content overflow-y-auto h-full pb-2 px-1">
             <div className="space-y-6 relative z-10">
               {conversation.map((item, index) => (
-                <div key={index} className={`flex ${item.speaker === 'milo' ? 'justify-start' : 'justify-end'}`}>
-                  {item.speaker === 'milo' ? (
-                    /* Milo's enhanced cloud speech bubble */
-                    <div className="relative max-w-[80%]">
-                      <div className="cloud-bubble bg-earlymind-yellow p-4 text-black border-2 border-yellow-300">
-                        <p className="font-medium text-base">{item.message}</p>
-                      </div>
-                      {/* Enhanced cloud puffs at bottom to create cloud shape */}
-                      <div className="absolute -bottom-1 left-3 w-5 h-5 bg-earlymind-yellow rounded-full border-2 border-yellow-300"></div>
-                      <div className="absolute -bottom-2 left-8 w-4 h-4 bg-earlymind-yellow rounded-full border-2 border-yellow-300"></div>
-                      <div className="absolute -bottom-1 left-12 w-6 h-6 bg-earlymind-yellow rounded-full border-2 border-yellow-300"></div>
-                      
-                      {/* Small tail */}
-                      <div className="absolute -left-1 bottom-2 w-3 h-3 bg-earlymind-yellow rounded-full border-2 border-yellow-300"></div>
-                    </div>
-                  ) : (
-                    /* Child's enhanced cloud speech bubble */
-                    <div className="relative max-w-[80%]">
-                      <div className="cloud-bubble bg-earlymind-teal p-4 text-white border-2 border-teal-300">
-                        <p className="font-medium text-base">{item.message}</p>
-                      </div>
-                      {/* Enhanced cloud puffs at bottom to create cloud shape */}
-                      <div className="absolute -bottom-1 right-3 w-5 h-5 bg-earlymind-teal rounded-full border-2 border-teal-300"></div>
-                      <div className="absolute -bottom-2 right-8 w-4 h-4 bg-earlymind-teal rounded-full border-2 border-teal-300"></div>
-                      <div className="absolute -bottom-1 right-12 w-6 h-6 bg-earlymind-teal rounded-full border-2 border-teal-300"></div>
-                      
-                      {/* Small tail */}
-                      <div className="absolute -right-1 bottom-2 w-3 h-3 bg-earlymind-teal rounded-full border-2 border-teal-300"></div>
-                    </div>
-                  )}
-                </div>
+                <ChatBubble
+                  key={index}
+                  message={item.message}
+                  isMilo={item.speaker === 'milo'}
+                />
               ))}
-              {/* Empty div for auto-scrolling to the bottom of the conversation */}
+              {loadingResponse && (
+                <div className="flex justify-start">
+                  <div className="bg-yellow-100 rounded-2xl px-4 py-2 text-gray-600">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-pulse">🤔</div>
+                      <span>Milo is thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {error && (
+                <div className="flex justify-center">
+                  <div className="bg-red-100 rounded-2xl px-4 py-2 text-red-600 text-sm">
+                    {error}
+                  </div>
+                </div>
+              )}
               <div ref={conversationEndRef} />
             </div>
           </div>
         </div>
 
-        {/* Character Placeholder - Mobile: Centered, Desktop: Right side of cloud */}
-        <div className="relative mb-6 self-center md:self-start md:ml-28 md:flex md:flex-col md:items-center">
-          {/* Circle background for character with animation */}
-          <div className="w-44 h-44 md:w-64 md:h-64 rounded-full bg-earlymind-teal-lighter flex items-center justify-center">
-            <div className="w-36 h-36 md:w-52 md:h-52 bg-earlymind-yellow rounded-full flex items-center justify-center relative overflow-hidden milo-character">
-              {/* Placeholder for character - to be replaced with actual character */}
-              <div className="text-3xl md:text-4xl font-bold text-white drop-shadow-md">Milo</div>
-              
-              {/* Bouncing animation when speaking */}
-              {isListening && (
-                <motion.div 
-                  className="absolute bottom-0 w-full h-1/3 bg-earlymind-teal-light opacity-30"
-                  animate={{ 
-                    height: ["33%", "50%", "33%"],
-                    opacity: [0.3, 0.5, 0.3]
-                  }}
-                  transition={{
-                    duration: 1.5,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                />
-              )}
-            </div>
-          </div>
+        {/* Milo Avatar */}
+        <div className="  w-96 relative mb-6 self-center md:self-start md:ml-28 md:flex md:flex-col md:items-center">
+          <MiloAvatar
+            isListening={isListening}
+            isThinking={isThinking}
+            isSpeaking={isSpeaking}
+            isRecording={isRecording}
+            className="scale-75 md:scale-100"
+          />
           
-          {/* Desktop: Microphone Button and text directly below character */}
+          {/* Desktop: Microphone Button */}
           <div className="hidden md:block mt-6 flex-col items-center">
             <motion.button
               onClick={handleMicClick}
@@ -325,7 +444,6 @@ function ChildSession() {
                 <Mic className="h-10 w-10 text-white" />
               )}
               
-              {/* Ripple effect when active */}
               {isListening && (
                 <motion.div 
                   className="absolute inset-0 rounded-full border-4 border-red-500"
@@ -342,7 +460,6 @@ function ChildSession() {
               )}
             </motion.button>
             
-            {/* Desktop: Text Label below mic */}
             <p className="mt-3 font-medium text-lg text-earlymind-teal-dark">
               {isListening ? 'Listening...' : 'Talk to Milo'}
             </p>
@@ -366,7 +483,6 @@ function ChildSession() {
               <Mic className="h-8 w-8 text-white" />
             )}
             
-            {/* Ripple effect when active */}
             {isListening && (
               <motion.div 
                 className="absolute inset-0 rounded-full border-4 border-red-500"
@@ -383,14 +499,35 @@ function ChildSession() {
             )}
           </motion.button>
           
-          {/* Mobile: Text Label */}
           <p className="mt-2 font-medium text-base text-earlymind-teal-dark">
             {isListening ? 'Listening...' : 'Talk to Milo'}
           </p>
         </div>
       </div>
 
-      {/* No mobile footer navigation in child mode */}
+      {/* Test Message Input - Development Only */}
+      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white rounded-xl shadow-xl p-4 border-2 border-gray-200 z-50">
+        <form onSubmit={handleTestMessage} className="space-y-3">
+          <label className="text-sm text-gray-700 font-medium block">Test Backend API:</label>
+          <div className="flex space-x-3">
+            <input
+              type="text"
+              value={testMessage}
+              onChange={(e) => setTestMessage(e.target.value)}
+              placeholder="Type a message to test..."
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-earlymind-teal focus:ring-2 focus:ring-earlymind-teal/20"
+              disabled={loadingResponse}
+            />
+            <button
+              type="submit"
+              disabled={!testMessage.trim() || loadingResponse}
+              className="px-6 py-3 bg-earlymind-teal text-white rounded-lg text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-earlymind-teal-dark transition-colors shadow-md"
+            >
+              {loadingResponse ? '⏳' : 'Send'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
