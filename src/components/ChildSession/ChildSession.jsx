@@ -35,8 +35,6 @@ function ChildSession() {
   // Speech SDK state
   const [recognizer, setRecognizer] = useState(null)
   const [synthesizer, setSynthesizer] = useState(null)
-  const speakingStartTimerRef = useRef(null)
-  const speakingEndTimerRef = useRef(null)
   
   const parentPin = '1234'
   const tapTimeout = useRef(null)
@@ -47,9 +45,6 @@ function ChildSession() {
   // Azure Speech Service configuration
   const subscriptionKey = import.meta.env.VITE_SPEECH_KEY
   const serviceRegion = import.meta.env.VITE_SPEECH_REGION
-  
-  // Fallback timer to ensure speaking state is reset
-  const fallbackTimerRef = useRef(null)
 
   // Auto-scroll to the bottom when conversation changes
   useEffect(() => {
@@ -72,16 +67,6 @@ function ChildSession() {
         } catch (err) {
           console.log("Synthesizer already disposed:", err);
         }
-      }
-      // Clear all timers
-      if (speakingStartTimerRef.current) {
-        clearTimeout(speakingStartTimerRef.current);
-      }
-      if (speakingEndTimerRef.current) {
-        clearTimeout(speakingEndTimerRef.current);
-      }
-      if (fallbackTimerRef.current) {
-        clearTimeout(fallbackTimerRef.current);
       }
     };
   }, [recognizer, synthesizer]);
@@ -134,12 +119,26 @@ function ChildSession() {
     }
   };
 
-  // Text-to-Speech function using Ana voice with accurate voice detection
+  // Simple Text-to-Speech function with character-based timing
   const speakText = async (textToSpeak) => {
     if (!textToSpeak.trim()) return;
     
     try {
       console.log("Starting TTS for:", textToSpeak);
+      
+      // Calculate speaking duration based on character count
+      // Average speaking rate: ~300 characters per minute (faster than before)
+      // Reduced timing to better match actual speech completion
+      const characterCount = textToSpeak.length;
+      const baseSpeed = 300; // characters per minute (increased from 200 for faster timing)
+      const durationInSeconds = (characterCount / baseSpeed) * 60;
+      const durationInMs = Math.max(durationInSeconds * 1000, 800); // Minimum 0.8 seconds (reduced)
+      const bufferTime = Math.min(durationInMs * 0.1, 1000); // 10% buffer, max 1 second (reduced)
+      const totalDuration = (durationInMs + bufferTime) * 0.6; // Scale to 60% of calculated time
+      
+      console.log(`Text: "${textToSpeak}"`);
+      console.log(`Characters: ${characterCount}`);
+      console.log(`Estimated duration: ${Math.round(totalDuration / 1000 * 10) / 10}s`);
       
       const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(
         subscriptionKey,
@@ -154,129 +153,20 @@ function ChildSession() {
       
       setSynthesizer(newSynthesizer);
 
+      // Set speaking state immediately
+      setIsSpeaking(true);
+
+      // Set timer to stop speaking based on calculated duration
+      const speakingTimer = setTimeout(() => {
+        console.log("Timer ended - stopping speaking animation");
+        setIsSpeaking(false);
+      }, totalDuration);
+
       return new Promise((resolve, reject) => {
-        // Clear any previous timers
-        if (speakingStartTimerRef.current) {
-          clearTimeout(speakingStartTimerRef.current);
-          speakingStartTimerRef.current = null;
-        }
-        if (speakingEndTimerRef.current) {
-          clearTimeout(speakingEndTimerRef.current);
-          speakingEndTimerRef.current = null;
-        }
-        if (fallbackTimerRef.current) {
-          clearTimeout(fallbackTimerRef.current);
-          fallbackTimerRef.current = null;
-        }
-
-        // Track if we've started speaking
-        let hasStartedSpeaking = false;
-
-        // Event listener for when synthesis starts (more accurate than synthesisStarted)
-        newSynthesizer.synthesisStarted = () => {
-          console.log("TTS synthesis started");
-          if (!hasStartedSpeaking) {
-            hasStartedSpeaking = true;
-            // Small delay to ensure audio actually starts playing
-            speakingStartTimerRef.current = setTimeout(() => {
-              console.log("Setting isSpeaking to true");
-              setIsSpeaking(true);
-            }, 200);
-          }
-        };
-
-        // Event listener for when synthesis completes
-        newSynthesizer.synthesisCompleted = (sender, event) => {
-          console.log("TTS synthesis completed, result reason:", event.result.reason);
-          
-          // Use a more accurate method to detect when audio finishes
-          // The audioData gives us the actual duration
-          if (event.result.audioData) {
-            // Calculate actual audio duration (rough estimate)
-            const audioDataLength = event.result.audioData.byteLength;
-            // Assuming 16-bit PCM at 16kHz (typical for speech synthesis)
-            const sampleRate = 16000;
-            const bytesPerSample = 2;
-            const duration = (audioDataLength / bytesPerSample / sampleRate) * 1000; // Convert to ms
-            
-            console.log(`Estimated audio duration: ${duration}ms`);
-            
-            // Add a small buffer to ensure audio playback completes
-            const bufferTime = Math.min(duration * 0.1, 500); // 10% buffer, max 500ms
-            const totalWaitTime = Math.min(duration + bufferTime, 5000); // Cap at 5 seconds
-            
-            speakingEndTimerRef.current = setTimeout(() => {
-              console.log("Setting isSpeaking to false after calculated duration");
-              setIsSpeaking(false);
-            }, totalWaitTime);
-          } else {
-            // Fallback to text-based estimation
-            const wordCount = textToSpeak.split(' ').length;
-            const estimatedDuration = Math.max(wordCount * 150, 500); // ~150ms per word, minimum 500ms
-            
-            speakingEndTimerRef.current = setTimeout(() => {
-              console.log("Setting isSpeaking to false after estimated duration");
-              setIsSpeaking(false);
-            }, Math.min(estimatedDuration, 3000)); // Cap at 3 seconds
-          }
-        };
-
-        // Event listener for when audio data is received (indicates actual audio playback)
-        newSynthesizer.wordBoundary = () => {
-          // This fires during actual speech playback
-          if (!hasStartedSpeaking) {
-            hasStartedSpeaking = true;
-            console.log("Word boundary detected - speech is playing");
-            if (speakingStartTimerRef.current) {
-              clearTimeout(speakingStartTimerRef.current);
-            }
-            setIsSpeaking(true);
-          }
-        };
-
-        // Event listener for cancellation
-        newSynthesizer.synthesisCanceled = (sender, event) => {
-          console.log("TTS synthesis canceled:", event.reason);
-          
-          // Clear all timers and reset state immediately
-          if (speakingStartTimerRef.current) {
-            clearTimeout(speakingStartTimerRef.current);
-            speakingStartTimerRef.current = null;
-          }
-          if (speakingEndTimerRef.current) {
-            clearTimeout(speakingEndTimerRef.current);
-            speakingEndTimerRef.current = null;
-          }
-          if (fallbackTimerRef.current) {
-            clearTimeout(fallbackTimerRef.current);
-            fallbackTimerRef.current = null;
-          }
-          setIsSpeaking(false);
-          
-          if (event.reason === SpeechSDK.CancellationReason.Error) {
-            setError(`TTS error: ${event.errorDetails}`);
-          }
-        };
-
-        // Set up a fallback timer to ensure speaking state is cleared (maximum 10 seconds)
-        fallbackTimerRef.current = setTimeout(() => {
-          console.log("Fallback timer: Forcing isSpeaking to false");
-          setIsSpeaking(false);
-        }, 10000);
-
-        // Start the synthesis
         newSynthesizer.speakTextAsync(
           textToSpeak,
           (result) => {
-            console.log("TTS speakTextAsync completed, result reason:", result.reason);
-            
-            // Clear fallback timer
-            if (fallbackTimerRef.current) {
-              clearTimeout(fallbackTimerRef.current);
-              fallbackTimerRef.current = null;
-            }
-            
-            // Clean up the synthesizer
+            console.log("TTS completed successfully");
             try {
               newSynthesizer.close();
             } catch (err) {
@@ -286,25 +176,10 @@ function ChildSession() {
             resolve(result);
           },
           (error) => {
-            console.error("TTS speakTextAsync failed:", error);
-            
-            // Clear all timers and reset state
-            if (speakingStartTimerRef.current) {
-              clearTimeout(speakingStartTimerRef.current);
-              speakingStartTimerRef.current = null;
-            }
-            if (speakingEndTimerRef.current) {
-              clearTimeout(speakingEndTimerRef.current);
-              speakingEndTimerRef.current = null;
-            }
-            if (fallbackTimerRef.current) {
-              clearTimeout(fallbackTimerRef.current);
-              fallbackTimerRef.current = null;
-            }
+            console.error("TTS failed:", error);
+            clearTimeout(speakingTimer);
             setIsSpeaking(false);
             setError(`TTS error: ${error}`);
-            
-            // Clean up the synthesizer
             try {
               newSynthesizer.close();
             } catch (err) {
@@ -317,26 +192,12 @@ function ChildSession() {
       });
     } catch (err) {
       console.error("TTS initialization failed:", err);
-      
-      // Clear any timers and reset state
-      if (speakingStartTimerRef.current) {
-        clearTimeout(speakingStartTimerRef.current);
-        speakingStartTimerRef.current = null;
-      }
-      if (speakingEndTimerRef.current) {
-        clearTimeout(speakingEndTimerRef.current);
-        speakingEndTimerRef.current = null;
-      }
-      if (fallbackTimerRef.current) {
-        clearTimeout(fallbackTimerRef.current);
-        fallbackTimerRef.current = null;
-      }
       setIsSpeaking(false);
       setError(`TTS error: ${err.message}`);
     }
   };
 
-  // Stop speaking function
+  // Simple stop speaking function
   const stopSpeaking = () => {
     if (synthesizer) {
       try {
@@ -345,19 +206,6 @@ function ChildSession() {
         console.log("Synthesizer already disposed:", err);
       }
       setSynthesizer(null);
-    }
-    // Clear all speaking-related timers
-    if (speakingStartTimerRef.current) {
-      clearTimeout(speakingStartTimerRef.current);
-      speakingStartTimerRef.current = null;
-    }
-    if (speakingEndTimerRef.current) {
-      clearTimeout(speakingEndTimerRef.current);
-      speakingEndTimerRef.current = null;
-    }
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
     }
     setIsSpeaking(false);
   };
