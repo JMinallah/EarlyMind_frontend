@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, User, Calendar, Home, BarChart3, Settings, Bell, Shield } from 'lucide-react'
@@ -7,8 +7,29 @@ import sessionService from '../../appwrite/sessionService'
 function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [isCreatingSession, setIsCreatingSession] = useState(false)
+  const [recentSessions, setRecentSessions] = useState([])
+  const [loadingSessions, setLoadingSessions] = useState(true)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+
+  // Load recent sessions when component mounts
+  useEffect(() => {
+    const loadRecentSessions = async () => {
+      if (user?.$id) {
+        try {
+          setLoadingSessions(true)
+          const sessions = await sessionService.getParentSessions(user.$id, 5) // Get 5 most recent
+          setRecentSessions(sessions)
+        } catch (error) {
+          console.error('Error loading recent sessions:', error)
+        } finally {
+          setLoadingSessions(false)
+        }
+      }
+    }
+
+    loadRecentSessions()
+  }, [user])
 
   const handleLogout = async () => {
     try {
@@ -264,43 +285,62 @@ function Dashboard() {
             </div>
             
             <div className="p-4">
-              {/* Placeholder for no activity */}
-              <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
-                <Calendar className="h-12 w-12 mx-auto text-gray-300 mb-2" />
-                <p className="text-gray-500">No recent activities</p>
-                <p className="text-xs text-gray-400 mt-1">Activities will appear here once you start using the app</p>
-              </div>
-              
-              {/* Example Activity Items (Hidden by default) */}
-              <div className="hidden">
-                <div className="border-b border-gray-100 pb-3 mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-sm">Completed Assessment</span>
-                    <span className="text-xs text-gray-500">2 hours ago</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Sarah completed the "Cognitive Skills Assessment"</p>
+              {loadingSessions ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-earlymind-teal mx-auto"></div>
+                  <p className="text-gray-500 mt-2">Loading sessions...</p>
                 </div>
-                
-                <div className="border-b border-gray-100 pb-3 mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-sm">New Learning Module</span>
-                    <span className="text-xs text-gray-500">Yesterday</span>
-                  </div>
-                  <p className="text-sm text-gray-600">New module "Early Reading Skills" is available</p>
+              ) : recentSessions.length > 0 ? (
+                <div className="space-y-3">
+                  {recentSessions.map((session) => (
+                    <div key={session.$id} className="border-b border-gray-100 pb-3 last:border-b-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-sm">
+                          Chat Session {session.status === 'active' ? '(Active)' : '(Completed)'}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(session.session_start).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {session.status === 'active' 
+                          ? 'Session in progress' 
+                          : `Duration: ${session.duration_minutes ? Math.round(session.duration_minutes) + ' minutes' : 'N/A'}`
+                        }
+                      </p>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          session.status === 'active' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {session.status === 'active' ? 'Active' : 'Completed'}
+                        </span>
+                        {session.status === 'active' && (
+                          <button
+                            onClick={() => navigate(`/child-session/${session.$id}`)}
+                            className="text-xs bg-earlymind-teal text-white px-2 py-1 rounded hover:bg-earlymind-teal-dark transition-colors"
+                          >
+                            Continue
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                
-                <div className="pb-3 mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-sm">Feedback Received</span>
-                    <span className="text-xs text-gray-500">3 days ago</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Dr. Johnson provided feedback on Sarah's assessment</p>
+              ) : (
+                <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                  <Calendar className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                  <p className="text-gray-500">No recent sessions</p>
+                  <p className="text-xs text-gray-400 mt-1">Start your first session to see activity here</p>
                 </div>
+              )}
+            </div>
                 
-                <button className="w-full mt-2 text-sm text-earlymind-teal hover:underline">
-                  View All Activity
-                </button>
-              </div>
+            <div className="border-t border-gray-100 p-4">
+              <button className="w-full text-sm text-earlymind-teal hover:underline">
+                View All Sessions
+              </button>
             </div>
           </div>
           

@@ -103,7 +103,7 @@ class SessionService {
    */
   async getParentSessions(parentId, limit = 50) {
     try {
-      const sessions = await databases.listDocuments(
+      const response = await databases.listDocuments(
         DATABASE_ID,
         CHAT_SESSIONS_COLLECTION_ID,
         [
@@ -112,7 +112,7 @@ class SessionService {
           Query.limit(limit)
         ]
       );
-      return sessions;
+      return response.documents;
     } catch (error) {
       console.error('Error getting parent sessions:', error);
       throw error;
