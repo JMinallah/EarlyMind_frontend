@@ -53,7 +53,7 @@ function AppRoutes() {
           } 
         />
         <Route 
-          path="/child-session" 
+          path="/child-session/:sessionId?" 
           element={
             <ProtectedRoute>
               <ChildSession />

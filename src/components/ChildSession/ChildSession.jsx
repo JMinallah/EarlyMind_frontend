@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Mic, MicOff, LogOut, Home, Check } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk"
 import MiloAvatar from './MiloAvatar'
 import ChatBubble from './ChatBubble'
+import sessionService from '../../appwrite/sessionService'
 
 // Cloud CSS styles
 import './cloud-bubble.css'
@@ -15,6 +16,9 @@ import './cloud-background.css'
 import './chat-scrollbar.css'
 
 function ChildSession() {
+  const { sessionId } = useParams()
+  const [currentSessionId, setCurrentSessionId] = useState(sessionId || null)
+  
   const [isListening, setIsListening] = useState(false)
   const [conversation, setConversation] = useState([
     { speaker: 'milo', message: 'Hi there! I\'m Milo. How are you feeling today?' }
@@ -46,10 +50,58 @@ function ChildSession() {
   const subscriptionKey = import.meta.env.VITE_SPEECH_KEY
   const serviceRegion = import.meta.env.VITE_SPEECH_REGION
 
+  // Helper function to add message to conversation and database
+  const addMessage = async (speaker, message) => {
+    // Add to local conversation state
+    setConversation(prev => [...prev, { speaker, message }]);
+    
+    // Add to database if we have a session
+    if (currentSessionId) {
+      try {
+        await sessionService.addMessage(currentSessionId, speaker, message);
+      } catch (error) {
+        console.error('Failed to save message to database:', error);
+        // Continue anyway - we don't want to break the chat flow
+      }
+    }
+  };
+
   // Auto-scroll to the bottom when conversation changes
   useEffect(() => {
-    conversationEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation]);
+    conversationEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [conversation])
+
+  // Load existing session messages when component mounts
+  useEffect(() => {
+    const loadSessionMessages = async () => {
+      if (currentSessionId) {
+        console.log('Loading session messages for:', currentSessionId);
+        try {
+          const messages = await sessionService.getSessionMessages(currentSessionId);
+          console.log('Retrieved messages:', messages);
+          
+          if (messages && Array.isArray(messages) && messages.length > 0) {
+            // Replace initial conversation with session messages
+            const conversationMessages = messages.map(msg => ({
+              speaker: msg.speaker,
+              message: msg.content || msg.message
+            }));
+            console.log('Setting conversation to loaded messages:', conversationMessages);
+            setConversation(conversationMessages);
+          } else {
+            console.log('No existing messages found, keeping default welcome message');
+          }
+        } catch (error) {
+          console.error('Failed to load session messages:', error);
+          // Keep the default welcome message if loading fails
+        }
+      } else {
+        console.log('No currentSessionId, not loading messages');
+      }
+    };
+
+    loadSessionMessages();
+  }, [currentSessionId]);
 
   // Cleanup speech components on unmount
   useEffect(() => {
@@ -92,10 +144,7 @@ function ChildSession() {
       const data = await response.json();
       
       // Add Milo's response to conversation display
-      setConversation(prev => [...prev, { 
-        speaker: 'milo', 
-        message: data.reply 
-      }])
+      await addMessage('milo', data.reply);
       
       console.log("Milo response:", data.reply);
       
@@ -108,10 +157,7 @@ function ChildSession() {
       setError(`Backend error: ${err.message}`);
       
       // Add error message to conversation
-      setConversation(prev => [...prev, { 
-        speaker: 'milo', 
-        message: "I'm sorry, I'm having trouble connecting right now. Could you try again?" 
-      }])
+      await addMessage('milo', "I'm sorry, I'm having trouble connecting right now. Could you try again?");
       
       throw err;
     } finally {
@@ -240,11 +286,8 @@ function ChildSession() {
           setIsRecording(false);
           setIsThinking(true);
           
-          // Add user message to conversation
-          setConversation(prev => [...prev, { 
-            speaker: 'child', 
-            message: e.result.text 
-          }]);
+          // Add user message to conversation (non-blocking)
+          addMessage('child', e.result.text).catch(console.error);
           
           // Send to backend
           sendToBackend(e.result.text).finally(() => {
@@ -329,6 +372,11 @@ function ChildSession() {
 
   const handleLogout = async () => {
     try {
+      // End the session if one is active
+      if (currentSessionId) {
+        await sessionService.endSession(currentSessionId);
+      }
+      
       await logout()
     } catch (error) {
       console.error('Logout error:', error)
@@ -379,10 +427,7 @@ function ChildSession() {
     setIsThinking(true)
     
     // Add user message to conversation
-    setConversation(prev => [...prev, { 
-      speaker: 'child', 
-      message: messageToSend 
-    }])
+    await addMessage('child', messageToSend);
 
     try {
       await sendToBackend(messageToSend)
@@ -405,8 +450,6 @@ function ChildSession() {
         onClick={handleCornerTap}
         aria-hidden="true"
       ></div>
-
-      <div>{motion}</div>
       
       {/* Parent Mode Overlay */}
       <AnimatePresence>

@@ -1,10 +1,14 @@
 import React, { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 import { LogOut, User, Calendar, Home, BarChart3, Settings, Bell, Shield } from 'lucide-react'
+import sessionService from '../../appwrite/sessionService'
 
 function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [isCreatingSession, setIsCreatingSession] = useState(false)
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
 
   const handleLogout = async () => {
     try {
@@ -12,6 +16,32 @@ function Dashboard() {
       // Navigation is handled by the protected route
     } catch (error) {
       console.error('Logout error:', error)
+    }
+  }
+
+  const handleStartSession = async () => {
+    if (!user) {
+      console.error('No user found');
+      return;
+    }
+
+    setIsCreatingSession(true);
+    
+    try {
+      // Create a new chat session
+      const session = await sessionService.createSession(
+        user.$id,
+        null // Child name - can be added later or from user preferences
+      );
+      
+      // Navigate to child session page with the session ID
+      navigate(`/child-session/${session.$id}`);
+      
+    } catch (error) {
+      console.error('Error creating session:', error);
+      alert('Failed to start session. Please try again.');
+    } finally {
+      setIsCreatingSession(false);
     }
   }
 
@@ -207,9 +237,17 @@ function Dashboard() {
                     <span className="font-medium">Oct 20</span>
                   </div>
                   <div className="space-y-2">
-                    <a href="/child-session" className="w-full mt-1 px-3 py-2 bg-earlymind-yellow text-white rounded-md text-sm font-medium hover:bg-earlymind-yellow-dark transition-colors flex items-center justify-center">
-                      Start Session
-                    </a>
+                    <button 
+                      onClick={handleStartSession}
+                      disabled={isCreatingSession}
+                      className={`w-full mt-1 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center ${
+                        isCreatingSession 
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-earlymind-yellow text-white hover:bg-earlymind-yellow-dark'
+                      }`}
+                    >
+                      {isCreatingSession ? 'Starting Session...' : 'Start Session'}
+                    </button>
                     <button className="w-full px-3 py-2 bg-earlymind-teal-lighter/20 text-earlymind-teal rounded text-sm hover:bg-earlymind-teal-lighter/30 transition-colors">
                       View Profile
                     </button>

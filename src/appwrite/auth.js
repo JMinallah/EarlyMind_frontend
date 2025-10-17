@@ -4,13 +4,23 @@ class AuthService {
     // Create a new account
     async createAccount({ email, password, name, userType = 'parent' }) {
         try {
+            console.log("Attempting to create account for:", email);
+            
             // First create the user account
             const userAccount = await account.create(ID.unique(), email, password, name);
+            
+            console.log("Account created successfully:", userAccount);
             
             // Store userType in preferences (a simple way to store user metadata)
             // This avoids needing a separate database collection for now
             if (userAccount) {
-                await account.updatePrefs({ userType });
+                try {
+                    await account.updatePrefs({ userType });
+                    console.log("User preferences updated successfully");
+                } catch (prefError) {
+                    console.log("Warning: Could not update preferences:", prefError);
+                    // Don't throw error for preferences, continue with login
+                }
                 
                 // Call login method to automatically log in the user after account creation
                 return this.login({ email, password });
@@ -19,6 +29,12 @@ class AuthService {
             }
         } catch (error) {
             console.log("Appwrite service :: createAccount :: error", error);
+            
+            // Provide more specific error messages
+            if (error.message?.includes('scope') || error.message?.includes('permission')) {
+                throw new Error("Registration is not enabled. Please contact support or check Appwrite project settings.");
+            }
+            
             throw error;
         }
     }
