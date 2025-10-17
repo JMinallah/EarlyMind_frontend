@@ -3,6 +3,7 @@ import { Mic, MicOff, LogOut, Home, Check } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk"
 import MiloAvatar from './MiloAvatar'
 import ChatBubble from './ChatBubble'
 
@@ -29,19 +30,55 @@ function ChildSession() {
   const [isRecording, setIsRecording] = useState(false)
   const [loadingResponse, setLoadingResponse] = useState(false)
   const [error, setError] = useState('')
-  const [conversationHistory, setConversationHistory] = useState([])
   const [testMessage, setTestMessage] = useState('')
+  
+  // Speech SDK state
+  const [recognizer, setRecognizer] = useState(null)
+  const [synthesizer, setSynthesizer] = useState(null)
+  const speakingStartTimerRef = useRef(null)
+  const speakingEndTimerRef = useRef(null)
   
   const parentPin = '1234'
   const tapTimeout = useRef(null)
   const { logout } = useAuth()
   const navigate = useNavigate()
   const conversationEndRef = useRef(null)
+  
+  // Azure Speech Service configuration
+  const subscriptionKey = import.meta.env.VITE_SPEECH_KEY
+  const serviceRegion = import.meta.env.VITE_SPEECH_REGION
 
   // Auto-scroll to the bottom when conversation changes
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation]);
+
+  // Cleanup speech components on unmount
+  useEffect(() => {
+    return () => {
+      if (recognizer) {
+        try {
+          recognizer.close();
+        } catch (err) {
+          console.log("Recognizer already disposed:", err);
+        }
+      }
+      if (synthesizer) {
+        try {
+          synthesizer.close();
+        } catch (err) {
+          console.log("Synthesizer already disposed:", err);
+        }
+      }
+      // Clear timers
+      if (speakingStartTimerRef.current) {
+        clearTimeout(speakingStartTimerRef.current);
+      }
+      if (speakingEndTimerRef.current) {
+        clearTimeout(speakingEndTimerRef.current);
+      }
+    };
+  }, [recognizer, synthesizer]);
 
   // Function to send prompt to backend
   const sendToBackend = async (prompt) => {
@@ -63,13 +100,6 @@ function ChildSession() {
 
       const data = await response.json();
       
-      // Add to conversation history
-      setConversationHistory(prev => [
-        ...prev,
-        { type: 'user', text: prompt, timestamp: new Date() },
-        { type: 'assistant', text: data.reply, timestamp: new Date() }
-      ]);
-      
       // Add Milo's response to conversation display
       setConversation(prev => [...prev, { 
         speaker: 'milo', 
@@ -77,6 +107,9 @@ function ChildSession() {
       }])
       
       console.log("Milo response:", data.reply);
+      
+      // Speak the response using TTS
+      speakText(data.reply);
       
       return data.reply;
     } catch (err) {
@@ -95,57 +128,251 @@ function ChildSession() {
     }
   };
 
-  const handleMicClick = async () => {
-    // Toggle listening state
-    setIsListening(!isListening)
+  // Text-to-Speech function using Ana voice
+  const speakText = async (textToSpeak) => {
+    if (!textToSpeak.trim()) return;
     
-    if (!isListening) {
-      // Simulate voice input for demo (in real app this would come from speech recognition)
-      setIsRecording(true)
+    try {
+      console.log("Starting TTS for:", textToSpeak);
       
-      // Simulate processing time
-      setTimeout(async () => {
-        setIsRecording(false)
-        setIsThinking(true)
-        
-        // Simulate different user messages for demo
-        const demoMessages = [
-          "I'm feeling happy today!",
-          "Can you tell me a story?",
-          "I want to play a game!",
-          "I had a good day at school",
-          "I'm excited about my birthday",
-          "Can we talk about animals?"
-        ]
-        const userMessage = demoMessages[Math.floor(Math.random() * demoMessages.length)]
-        
-        // Add user message to conversation
-        setConversation(prev => [...prev, { 
-          speaker: 'child', 
-          message: userMessage 
-        }])
+      const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(
+        subscriptionKey,
+        serviceRegion
+      );
+      
+      // Set voice to Ana
+      speechConfig.speechSynthesisVoiceName = "en-US-AnaNeural";
+      
+      const audioConfig = SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+      const newSynthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig, audioConfig);
+      
+      setSynthesizer(newSynthesizer);
 
-        try {
-          // Get response from backend
-          await sendToBackend(userMessage)
-
-          // Set Milo to speaking state
-          setIsThinking(false)
-          setIsSpeaking(true)
-          
-          // Simulate speaking time
-          setTimeout(() => {
-            setIsSpeaking(false)
-            setIsListening(false)
-          }, 3000)
-
-        } catch (error) {
-          console.error('Error getting response:', error)
-          setIsThinking(false)
-          setIsListening(false)
+      return new Promise((resolve, reject) => {
+        // Clear any previous timers
+        if (speakingStartTimerRef.current) {
+          clearTimeout(speakingStartTimerRef.current);
+          speakingStartTimerRef.current = null;
         }
-      }, 2000)
+        if (speakingEndTimerRef.current) {
+          clearTimeout(speakingEndTimerRef.current);
+          speakingEndTimerRef.current = null;
+        }
+
+        // Event listener for when audio begins
+        newSynthesizer.synthesisStarted = () => {
+          console.log("Audio started (synthesisStarted)");
+          speakingStartTimerRef.current = setTimeout(() => {
+            setIsSpeaking(true);
+          }, 120);
+        };
+
+        // Event listener for when audio fully queued to device
+        newSynthesizer.synthesisCompleted = () => {
+          console.log("Audio completed (synthesisCompleted)");
+          speakingEndTimerRef.current = setTimeout(() => {
+            setIsSpeaking(false);
+          }, 320);
+        };
+
+        newSynthesizer.synthesisCanceled = () => {
+          console.log("Audio canceled (synthesisCanceled)");
+          if (speakingStartTimerRef.current) {
+            clearTimeout(speakingStartTimerRef.current);
+            speakingStartTimerRef.current = null;
+          }
+          if (speakingEndTimerRef.current) {
+            clearTimeout(speakingEndTimerRef.current);
+            speakingEndTimerRef.current = null;
+          }
+          setIsSpeaking(false);
+        };
+
+        newSynthesizer.speakTextAsync(
+          textToSpeak,
+          (result) => {
+            console.log("TTS synthesis finished");
+            try {
+              newSynthesizer.close();
+            } catch (err) {
+              console.log("Synthesizer cleanup:", err);
+            }
+            setSynthesizer(null);
+            resolve(result);
+          },
+          (error) => {
+            console.error("TTS synthesis failed:", error);
+            if (speakingStartTimerRef.current) {
+              clearTimeout(speakingStartTimerRef.current);
+              speakingStartTimerRef.current = null;
+            }
+            if (speakingEndTimerRef.current) {
+              clearTimeout(speakingEndTimerRef.current);
+              speakingEndTimerRef.current = null;
+            }
+            setIsSpeaking(false);
+            setError(`TTS error: ${error}`);
+            try {
+              newSynthesizer.close();
+            } catch (err) {
+              console.log("Synthesizer cleanup:", err);
+            }
+            setSynthesizer(null);
+            reject(error);
+          }
+        );
+      });
+    } catch (err) {
+      console.error("TTS initialization failed:", err);
+      if (speakingStartTimerRef.current) {
+        clearTimeout(speakingStartTimerRef.current);
+        speakingStartTimerRef.current = null;
+      }
+      if (speakingEndTimerRef.current) {
+        clearTimeout(speakingEndTimerRef.current);
+        speakingEndTimerRef.current = null;
+      }
+      setIsSpeaking(false);
+      setError(`TTS error: ${err.message}`);
     }
+  };
+
+  // Stop speaking function
+  const stopSpeaking = () => {
+    if (synthesizer) {
+      try {
+        synthesizer.close();
+      } catch (err) {
+        console.log("Synthesizer already disposed:", err);
+      }
+      setSynthesizer(null);
+    }
+    if (speakingStartTimerRef.current) {
+      clearTimeout(speakingStartTimerRef.current);
+      speakingStartTimerRef.current = null;
+    }
+    if (speakingEndTimerRef.current) {
+      clearTimeout(speakingEndTimerRef.current);
+      speakingEndTimerRef.current = null;
+    }
+    setIsSpeaking(false);
+  };
+
+  // Start continuous listening
+  const startContinuousListening = () => {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    try {
+      const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(
+        subscriptionKey,
+        serviceRegion
+      );
+      speechConfig.speechRecognitionLanguage = "en-US";
+
+      const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+      const newRecognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+
+      // Event handlers for continuous recognition
+      newRecognizer.recognizing = (s, e) => {
+        console.log(`RECOGNIZING: Text=${e.result.text}`);
+        setIsRecording(true);
+      };
+
+      newRecognizer.recognized = (s, e) => {
+        console.log(`RECOGNIZED: Text=${e.result.text}`);
+        
+        if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech && e.result.text.trim()) {
+          setIsRecording(false);
+          setIsThinking(true);
+          
+          // Add user message to conversation
+          setConversation(prev => [...prev, { 
+            speaker: 'child', 
+            message: e.result.text 
+          }]);
+          
+          // Send to backend
+          sendToBackend(e.result.text).finally(() => {
+            setIsThinking(false);
+          });
+        } else if (e.result.reason === SpeechSDK.ResultReason.NoMatch) {
+          console.log("NOMATCH: Speech could not be recognized.");
+          setIsRecording(false);
+        }
+      };
+
+      newRecognizer.canceled = (s, e) => {
+        console.log(`CANCELED: Reason=${e.reason}`);
+        
+        if (e.reason === SpeechSDK.CancellationReason.Error) {
+          setError(`Speech recognition error: ${e.errorDetails}`);
+        }
+        
+        setIsRecording(false);
+        setIsListening(false);
+      };
+
+      newRecognizer.sessionStopped = () => {
+        console.log("Session stopped event.");
+        setIsListening(false);
+        setIsRecording(false);
+      };
+
+      // Start continuous recognition
+      newRecognizer.startContinuousRecognitionAsync(
+        () => {
+          console.log("Continuous recognition started");
+          setIsListening(true);
+          setError("");
+        },
+        (err) => {
+          console.error("Failed to start continuous recognition:", err);
+          setError(`Failed to start listening: ${err}`);
+          setIsListening(false);
+        }
+      );
+
+      setRecognizer(newRecognizer);
+
+    } catch (err) {
+      console.error("Failed to initialize speech recognition:", err);
+      setError(`Initialization error: ${err.message}`);
+    }
+  };
+
+  // Stop continuous listening
+  const stopListening = () => {
+    if (recognizer) {
+      recognizer.stopContinuousRecognitionAsync(
+        () => {
+          console.log("Continuous recognition stopped");
+          setIsListening(false);
+          setIsRecording(false);
+          try {
+            recognizer.close();
+          } catch (err) {
+            console.log("Recognizer already disposed:", err);
+          }
+          setRecognizer(null);
+        },
+        (err) => {
+          console.error("Failed to stop recognition:", err);
+          setError(`Failed to stop listening: ${err}`);
+          setIsListening(false);
+          setIsRecording(false);
+          setRecognizer(null);
+        }
+      );
+    }
+    // Also stop any ongoing speech
+    stopSpeaking();
+  };
+
+  const handleMicClick = async () => {
+    startContinuousListening();
   }
 
   const handleLogout = async () => {
@@ -195,26 +422,23 @@ function ChildSession() {
     e.preventDefault()
     if (!testMessage.trim()) return
 
+    const messageToSend = testMessage.trim()
+    setTestMessage('') // Clear input immediately for better UX
     setIsThinking(true)
     
     // Add user message to conversation
     setConversation(prev => [...prev, { 
       speaker: 'child', 
-      message: testMessage 
+      message: messageToSend 
     }])
 
     try {
-      await sendToBackend(testMessage)
-      setIsSpeaking(true)
-      
-      setTimeout(() => {
-        setIsSpeaking(false)
-      }, 3000)
+      await sendToBackend(messageToSend)
+      // TTS will be handled by sendToBackend function
     } catch (error) {
       console.error('Error:', error)
     } finally {
       setIsThinking(false)
-      setTestMessage('')
     }
   }
 
@@ -428,21 +652,83 @@ function ChildSession() {
             className="scale-75 md:scale-100"
           />
           
-          {/* Desktop: Microphone Button */}
+          {/* Desktop: Microphone and Control Buttons */}
           <div className="hidden md:block mt-6 flex-col items-center">
+            <div className="flex gap-4 items-center justify-center">
+              <motion.button
+                onClick={handleMicClick}
+                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.05 }}
+                className={`relative w-20 h-20 rounded-full flex items-center justify-center shadow-lg ${
+                  isListening ? 'bg-red-500' : 'bg-earlymind-teal'
+                }`}
+                disabled={isSpeaking}
+              >
+                <div className="absolute inset-0 rounded-full bg-white opacity-20"></div>
+                {isListening ? (
+                  <MicOff className="h-10 w-10 text-white" />
+                ) : (
+                  <Mic className="h-10 w-10 text-white" />
+                )}
+                
+                {isListening && (
+                  <motion.div 
+                    className="absolute inset-0 rounded-full border-4 border-red-500"
+                    animate={{ 
+                      scale: [1, 1.3, 1],
+                      opacity: [1, 0, 1]
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                  />
+                )}
+              </motion.button>
+              
+              {/* Stop Speaking Button - appears when Milo is speaking */}
+              {isSpeaking && (
+                <motion.button
+                  onClick={stopSpeaking}
+                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.05 }}
+                  className="relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg bg-orange-500"
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0 }}
+                >
+                  <div className="absolute inset-0 rounded-full bg-white opacity-20"></div>
+                  <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                  </svg>
+                </motion.button>
+              )}
+            </div>
+            
+            <p className="mt-3 font-medium text-lg text-earlymind-teal-dark">
+              {isSpeaking ? 'Milo is speaking...' : isListening ? 'Listening...' : 'Talk to Milo'}
+            </p>
+          </div>
+        </div>
+
+        {/* Mobile only: Microphone and Control Buttons */}
+        <div className="md:hidden flex flex-col items-center">
+          <div className="flex gap-3 items-center justify-center">
             <motion.button
               onClick={handleMicClick}
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.05 }}
-              className={`relative w-20 h-20 rounded-full flex items-center justify-center shadow-lg ${
+              className={`relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg ${
                 isListening ? 'bg-red-500' : 'bg-earlymind-teal'
               }`}
+              disabled={isSpeaking}
             >
               <div className="absolute inset-0 rounded-full bg-white opacity-20"></div>
               {isListening ? (
-                <MicOff className="h-10 w-10 text-white" />
+                <MicOff className="h-8 w-8 text-white" />
               ) : (
-                <Mic className="h-10 w-10 text-white" />
+                <Mic className="h-8 w-8 text-white" />
               )}
               
               {isListening && (
@@ -461,71 +747,70 @@ function ChildSession() {
               )}
             </motion.button>
             
-            <p className="mt-3 font-medium text-lg text-earlymind-teal-dark">
-              {isListening ? 'Listening...' : 'Talk to Milo'}
-            </p>
+            {/* Stop Speaking Button - appears when Milo is speaking */}
+            {isSpeaking && (
+              <motion.button
+                onClick={stopSpeaking}
+                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.05 }}
+                className="relative w-12 h-12 rounded-full flex items-center justify-center shadow-lg bg-orange-500"
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0 }}
+              >
+                <div className="absolute inset-0 rounded-full bg-white opacity-20"></div>
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+              </motion.button>
+            )}
           </div>
-        </div>
-
-        {/* Mobile only: Microphone Button */}
-        <div className="md:hidden flex flex-col items-center">
-          <motion.button
-            onClick={handleMicClick}
-            whileTap={{ scale: 0.95 }}
-            whileHover={{ scale: 1.05 }}
-            className={`relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg mx-auto ${
-              isListening ? 'bg-red-500' : 'bg-earlymind-teal'
-            }`}
-          >
-            <div className="absolute inset-0 rounded-full bg-white opacity-20"></div>
-            {isListening ? (
-              <MicOff className="h-8 w-8 text-white" />
-            ) : (
-              <Mic className="h-8 w-8 text-white" />
-            )}
-            
-            {isListening && (
-              <motion.div 
-                className="absolute inset-0 rounded-full border-4 border-red-500"
-                animate={{ 
-                  scale: [1, 1.3, 1],
-                  opacity: [1, 0, 1]
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              />
-            )}
-          </motion.button>
           
           <p className="mt-2 font-medium text-base text-earlymind-teal-dark">
-            {isListening ? 'Listening...' : 'Talk to Milo'}
+            {isSpeaking ? 'Milo is speaking...' : isListening ? 'Listening...' : 'Talk to Milo'}
           </p>
         </div>
       </div>
 
-      {/* Test Message Input - Development Only */}
-      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white rounded-xl shadow-xl p-4 border-2 border-gray-200 z-50">
+      {/* Chat Input - Alternative to Voice */}
+      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-4 border border-blue-200 z-50">
         <form onSubmit={handleTestMessage} className="space-y-3">
-          <label className="text-sm text-gray-700 font-medium block">Test Backend API:</label>
+          <div className="flex items-center space-x-2 mb-2">
+            <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+            <span className="text-sm text-gray-600 font-medium">Type your message to Milo</span>
+          </div>
           <div className="flex space-x-3">
             <input
               type="text"
               value={testMessage}
               onChange={(e) => setTestMessage(e.target.value)}
-              placeholder="Type a message to test..."
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-earlymind-teal focus:ring-2 focus:ring-earlymind-teal/20"
+              placeholder="Hi Milo, how are you today?"
+              className="flex-1 px-4 py-3 border-2 border-blue-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all duration-200 bg-white/90 placeholder-gray-400"
               disabled={loadingResponse}
+              autoComplete="off"
+              maxLength={200}
             />
             <button
               type="submit"
               disabled={!testMessage.trim() || loadingResponse}
-              className="px-6 py-3 bg-earlymind-teal text-white rounded-lg text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-earlymind-teal-dark transition-colors shadow-md"
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-teal-500 text-white rounded-xl text-sm font-medium disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed hover:from-blue-600 hover:to-teal-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
             >
-              {loadingResponse ? '⏳' : 'Send'}
+              {loadingResponse ? (
+                <div className="flex items-center space-x-1">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
             </button>
+          </div>
+          <div className="text-xs text-gray-500 text-center flex items-center justify-between">
+            <span>💡 You can also use the microphone button to speak</span>
+            <span className={`${testMessage.length > 180 ? 'text-orange-500' : 'text-gray-400'}`}>
+              {testMessage.length}/200
+            </span>
           </div>
         </form>
       </div>
