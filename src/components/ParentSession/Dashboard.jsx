@@ -521,7 +521,6 @@ For more information, visit: https://earlymind.com
                               </div>
                             ) : (
                               <div className="flex items-center">
-                                <span className="mr-2 text-xl">👋</span>
                                 <span>Start Session with {child.name}</span>
                               </div>
                             )}

@@ -24,8 +24,8 @@ class ChildProfileService {
         age: childData.age,
         gender: childData.gender || null,
         notes: childData.notes || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        $createdAt: new Date().toISOString(),
+        $updatedAt: new Date().toISOString(),
         sessions_count: 0,
         last_session: null
       };
@@ -56,7 +56,7 @@ class ChildProfileService {
         CHILD_PROFILES_COLLECTION_ID,
         [
           Query.equal('parent_id', parentId),
-          Query.orderDesc('updated_at')
+          Query.orderDesc('$updatedAt')
         ]
       );
 
@@ -151,7 +151,7 @@ class ChildProfileService {
         {
           sessions_count: profile.sessions_count + 1,
           last_session: sessionId,
-          updated_at: new Date().toISOString()
+          $updatedAt: new Date().toISOString()
         }
       );
 
