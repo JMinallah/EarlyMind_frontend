@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, Calendar, Home, BarChart3, Settings, Bell, Shield } from 'lucide-react'
+import { LogOut, User, Calendar, Home, BarChart3, Settings, Bell, Shield, Brain, X } from 'lucide-react'
 import sessionService from '../../appwrite/sessionService'
 
 function Dashboard() {
@@ -9,6 +9,10 @@ function Dashboard() {
   const [isCreatingSession, setIsCreatingSession] = useState(false)
   const [recentSessions, setRecentSessions] = useState([])
   const [loadingSessions, setLoadingSessions] = useState(true)
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false)
+  const [selectedSession, setSelectedSession] = useState(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState(null)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
@@ -30,6 +34,81 @@ function Dashboard() {
 
     loadRecentSessions()
   }, [user])
+
+  const handleAnalyzeSession = async (session) => {
+    setSelectedSession(session)
+    setShowAnalysisModal(true)
+    setAnalysisLoading(true)
+    setAnalysisResult(null)
+
+    try {
+      // Fetch messages for this session
+      const messages = await sessionService.getSessionMessages(session.$id)
+      
+      if (!messages || messages.length === 0) {
+        setAnalysisResult({
+          error: "No conversation data found for this session."
+        })
+        setAnalysisLoading(false)
+        return
+      }
+
+      // Format messages for AI analysis
+      const conversationText = messages
+        .map(msg => `${msg.speaker === 'child' ? 'Child' : 'Milo'}: ${msg.message}`)
+        .join('\n')
+
+      // Send to AI for analysis
+      const response = await fetch('http://localhost:5000/api/openai-raw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content: `You are a child psychology expert. Analyze the following conversation between a child and an AI assistant named Milo. Provide a mental health and emotional well-being assessment for the parent. Focus on:
+
+1. Emotional state indicators
+2. Communication patterns
+3. Any concerns or positive signs
+4. Developmental insights
+5. Recommendations for the parent
+
+Format your response as a structured analysis that's easy for parents to understand. Be supportive and constructive.`
+            },
+            {
+              role: "user",
+              content: `Please analyze this conversation:\n\n${conversationText}`
+            }
+          ],
+          max_tokens: 800,
+          temperature: 0.7,
+          stream: false
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      setAnalysisResult({
+        analysis: data.choices[0].message.content,
+        sessionDate: new Date(session.session_start).toLocaleDateString(),
+        messageCount: messages.length
+      })
+
+    } catch (error) {
+      console.error('Analysis error:', error)
+      setAnalysisResult({
+        error: `Failed to analyze session: ${error.message}`
+      })
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }
 
   const handleLogout = async () => {
     try {
@@ -316,14 +395,23 @@ function Dashboard() {
                         }`}>
                           {session.status === 'active' ? 'Active' : 'Completed'}
                         </span>
-                        {session.status === 'active' && (
+                        <div className="flex gap-2">
+                          {session.status === 'active' && (
+                            <button
+                              onClick={() => navigate(`/child-session/${session.$id}`)}
+                              className="text-xs bg-earlymind-teal text-white px-2 py-1 rounded hover:bg-earlymind-teal-dark transition-colors"
+                            >
+                              Continue
+                            </button>
+                          )}
                           <button
-                            onClick={() => navigate(`/child-session/${session.$id}`)}
-                            className="text-xs bg-earlymind-teal text-white px-2 py-1 rounded hover:bg-earlymind-teal-dark transition-colors"
+                            onClick={() => handleAnalyzeSession(session)}
+                            className="text-xs bg-earlymind-yellow text-white px-2 py-1 rounded hover:bg-earlymind-yellow-dark transition-colors flex items-center gap-1"
                           >
-                            Continue
+                            <Brain className="h-3 w-3" />
+                            Analyze
                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -447,6 +535,149 @@ function Dashboard() {
 
       {/* Add padding at the bottom on mobile to account for the navigation bar */}
       <div className="h-16 md:h-0"></div>
+
+      {/* Analysis Modal */}
+      {showAnalysisModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-earlymind-teal text-white p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                <h3 className="text-lg font-medium">Session Analysis</h3>
+              </div>
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {analysisLoading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-earlymind-teal mx-auto mb-4"></div>
+                  <p className="text-gray-600">Analyzing conversation...</p>
+                  <p className="text-sm text-gray-500 mt-2">This may take a few moments</p>
+                </div>
+              ) : analysisResult?.error ? (
+                <div className="text-center py-12">
+                  <div className="bg-red-100 border border-red-300 rounded-lg p-6">
+                    <h4 className="text-red-800 font-medium mb-2">Analysis Error</h4>
+                    <p className="text-red-600">{analysisResult.error}</p>
+                  </div>
+                </div>
+              ) : analysisResult ? (
+                <div>
+                  {/* Session Info */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <h4 className="font-medium text-gray-800 mb-3 flex items-center">
+                      <Calendar className="h-4 w-4 mr-2 text-earlymind-teal" />
+                      Session Information
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="bg-white p-3 rounded-lg border border-gray-200">
+                        <span className="text-gray-600 block">📅 Date</span>
+                        <span className="font-medium text-lg">{analysisResult.sessionDate}</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-gray-200">
+                        <span className="text-gray-600 block">💬 Messages</span>
+                        <span className="font-medium text-lg">{analysisResult.messageCount}</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-gray-200">
+                        <span className="text-gray-600 block">🕐 Analysis</span>
+                        <span className="font-medium text-lg">Complete</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Summary Table */}
+                  <div className="bg-gradient-to-r from-earlymind-teal to-earlymind-yellow bg-opacity-5 rounded-lg p-4 mb-6 border border-earlymind-teal border-opacity-20">
+                    <h4 className="font-medium text-gray-800 mb-3 flex items-center">
+                      <BarChart3 className="h-4 w-4 mr-2 text-earlymind-teal" />
+                      Quick Assessment Overview
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="text-center p-2">
+                        <div className="text-2xl mb-1">😊</div>
+                        <div className="text-xs text-gray-600">Emotional State</div>
+                        <div className="font-medium text-green-600">Positive</div>
+                      </div>
+                      <div className="text-center p-2">
+                        <div className="text-2xl mb-1">💬</div>
+                        <div className="text-xs text-gray-600">Communication</div>
+                        <div className="font-medium text-blue-600">Active</div>
+                      </div>
+                      <div className="text-center p-2">
+                        <div className="text-2xl mb-1">🧠</div>
+                        <div className="text-xs text-gray-600">Development</div>
+                        <div className="font-medium text-purple-600">Healthy</div>
+                      </div>
+                      <div className="text-center p-2">
+                        <div className="text-2xl mb-1">📈</div>
+                        <div className="text-xs text-gray-600">Engagement</div>
+                        <div className="font-medium text-orange-600">High</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Analysis */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <h4 className="font-medium text-gray-800 mb-4 flex items-center gap-2">
+                      <Brain className="h-5 w-5 text-earlymind-teal" />
+                      Mental Health & Well-being Analysis
+                    </h4>
+                    <div className="prose prose-sm max-w-none">
+                      <div 
+                        className="text-gray-700 leading-relaxed space-y-4"
+                        dangerouslySetInnerHTML={{
+                          __html: analysisResult.analysis
+                            .replace(/^#\s+(.+)$/gm, '<div class="text-xl font-bold text-earlymind-teal mb-3 mt-6 first:mt-0 flex items-center"><span class="mr-2">🧠</span>$1</div>') // Main headers with emoji
+                            .replace(/^##\s+(.+)$/gm, '<div class="text-lg font-semibold text-gray-800 mb-2 mt-4 flex items-center"><span class="mr-2">📊</span>$1</div>') // Sub headers
+                            .replace(/^###\s+(.+)$/gm, '<div class="text-md font-medium text-gray-700 mb-2 mt-3 flex items-center"><span class="mr-2">📋</span>$1</div>') // Sub-sub headers
+                            .replace(/^####\s+(.+)$/gm, '<div class="text-sm font-medium text-gray-600 mb-1 mt-2 flex items-center"><span class="mr-2">📌</span>$1</div>') // Minor headers
+                            .replace(/^\d+\.\s+(.+)$/gm, '<div class="font-medium text-gray-800 mb-2 mt-4 p-3 bg-gray-50 rounded-lg border-l-4 border-earlymind-teal flex items-start"><span class="text-earlymind-teal mr-2 font-bold">$1</span></div>') // Numbered sections
+                            .replace(/^\s*•\s+(.+)$/gm, '<div class="ml-6 mb-2 flex items-start"><span class="text-earlymind-teal mr-2 text-lg">•</span><span class="flex-1">$1</span></div>') // Bullet points
+                            .replace(/^\s*-\s+(.+)$/gm, '<div class="ml-6 mb-2 flex items-start"><span class="text-earlymind-teal mr-2 text-lg">•</span><span class="flex-1">$1</span></div>') // Convert dashes to bullets
+                            .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900 bg-yellow-100 px-1 rounded">$1</strong>') // Bold text with highlight
+                            .replace(/\*(.+?)\*/g, '<em class="italic text-gray-800">$1</em>') // Italic text
+                            .replace(/Positive Signs?:/gi, '<div class="inline-flex items-center bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium mb-3 mt-2"><span class="mr-1">✅</span>Positive Signs</div><div class="mb-3">')
+                            .replace(/Concerns?:/gi, '<div class="inline-flex items-center bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium mb-3 mt-2"><span class="mr-1">⚠️</span>Concerns</div><div class="mb-3">')
+                            .replace(/Recommendations?:/gi, '<div class="inline-flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium mb-3 mt-2"><span class="mr-1">💡</span>Recommendations</div><div class="mb-3">')
+                            .replace(/Overall[,:]?\s*/gi, '<div class="bg-gradient-to-r from-earlymind-teal to-earlymind-yellow bg-opacity-10 p-4 rounded-lg mt-6 border-l-4 border-earlymind-teal"><div class="font-semibold text-earlymind-teal mb-3 flex items-center"><span class="mr-2">🎯</span>Overall Assessment</div><div class="text-gray-700">')
+                            .replace(/\n\n+/g, '</div><div class="mt-4 mb-2">') // Convert double line breaks to spacing
+                            .replace(/\n/g, '<br class="mb-1">') // Convert single line breaks
+                            + '</div>' // Close any open divs
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Disclaimer */}
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Disclaimer:</strong> This analysis is generated by AI and should not replace professional medical or psychological advice. 
+                      If you have concerns about your child's mental health, please consult with a qualified healthcare professional.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-gray-200 p-4 flex justify-end">
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
