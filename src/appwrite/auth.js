@@ -23,7 +23,8 @@ class AuthService {
                 }
                 
                 // Call login method to automatically log in the user after account creation
-                return this.login({ email, password });
+                const loginResult = await this.login({ email, password });
+                return loginResult; // This now contains both session and user
             } else {
                 return userAccount;
             }
@@ -41,7 +42,16 @@ class AuthService {
 
     // Login user
     async login({ email, password }) {
-        return await account.createEmailPasswordSession(email, password);
+        // Create the email session
+        const session = await account.createEmailPasswordSession(email, password);
+        
+        if (session) {
+            // Get the user data including preferences
+            const user = await this.getCurrentUser();
+            return { session, user };
+        }
+        
+        return { session: null, user: null };
     }
 
     // Get current user

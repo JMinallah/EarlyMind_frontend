@@ -42,15 +42,22 @@ function Register() {
         setLoading(true);
 
         try {
-            await register({
+            const result = await register({
                 email: formData.email,
                 password: formData.password,
                 name: formData.name,
                 userType: formData.userType
             });
-            navigate('/dashboard'); // Redirect to dashboard after successful registration
+            
+            if (result && result.success) {
+                // If registration was successful, redirect to dashboard
+                navigate('/dashboard');
+            } else {
+                // If for some reason we don't have a success status
+                setError('Registration successful, but there was an issue logging in. Please try logging in manually.');
+            }
         } catch (error) {
-            setError(error.message);
+            setError(error.message || 'An error occurred during registration');
         } finally {
             setLoading(false);
         }

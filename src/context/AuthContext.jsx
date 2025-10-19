@@ -32,12 +32,12 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async ({ email, password }) => {
-        const session = await authService.login({ email, password });
-        if (session) {
-            const userData = await authService.getCurrentUser();
-            setUser(userData);
-            return { success: true };
+        const { session, user } = await authService.login({ email, password });
+        if (session && user) {
+            setUser(user);
+            return { success: true, user };
         }
+        return { success: false };
     };
 
     const register = async ({ email, password, name, userType }) => {
@@ -49,7 +49,12 @@ export const AuthProvider = ({ children }) => {
             userType
         });
         
-        // Log in the user after registration is handled inside createAccount in auth.js
+        // The login is handled inside createAccount in auth.js
+        // but we need to update the user state here
+        if (response && response.user) {
+            setUser(response.user);
+            return { success: true, user: response.user };
+        }
         
         return response;
     };
