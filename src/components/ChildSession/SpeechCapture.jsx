@@ -162,7 +162,7 @@ const SpeechCapture = () => {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:5000/api/ask-milo", {
+      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/ask-milo`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

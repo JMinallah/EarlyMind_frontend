@@ -49,11 +49,10 @@ export const AuthProvider = ({ children }) => {
             userType
         });
         
-        // The login is handled inside createAccount in auth.js
-        // but we need to update the user state here
-        if (response && response.user) {
-            setUser(response.user);
-            return { success: true, user: response.user };
+        // After successful registration and automatic login, get the user data
+        if (response) {
+            const userData = await authService.getCurrentUser();
+            setUser(userData);
         }
         
         return response;
