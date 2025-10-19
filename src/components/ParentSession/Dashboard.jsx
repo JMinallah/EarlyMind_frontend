@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, User, Calendar, Home, BarChart3, Settings, Bell, Shield, Brain, X, Copy, Download, Check } from 'lucide-react'
+import { LogOut, User, Calendar, Home, BarChart3, Settings, Bell, Shield, Brain, X, Copy, Download, Check, Plus } from 'lucide-react'
 import sessionService from '../../appwrite/sessionService'
+import childProfileService from '../../appwrite/childProfileService'
 
 function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -14,27 +15,98 @@ function Dashboard() {
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [childProfiles, setChildProfiles] = useState([])
+  const [loadingProfiles, setLoadingProfiles] = useState(true)
+  const [showAddChildModal, setShowAddChildModal] = useState(false)
+  const [_selectedChild, setSelectedChild] = useState(null)
+  const [newChildData, setNewChildData] = useState({
+    name: '',
+    age: '',
+    gender: '',
+    notes: ''
+  })
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // Load recent sessions when component mounts
+  // Load recent sessions and child profiles when component mounts
   useEffect(() => {
-    const loadRecentSessions = async () => {
+    const loadData = async () => {
       if (user?.$id) {
         try {
+          // Load sessions
           setLoadingSessions(true)
           const sessions = await sessionService.getParentSessions(user.$id, 5) // Get 5 most recent
           setRecentSessions(sessions)
+          
+          // Load child profiles
+          setLoadingProfiles(true)
+          const profiles = await childProfileService.getChildProfiles(user.$id)
+          setChildProfiles(profiles)
         } catch (error) {
-          console.error('Error loading recent sessions:', error)
+          console.error('Error loading dashboard data:', error)
         } finally {
           setLoadingSessions(false)
+          setLoadingProfiles(false)
         }
       }
     }
 
-    loadRecentSessions()
+    loadData()
   }, [user])
+  
+  // Handle adding a new child profile
+  const handleAddChild = async (e) => {
+    e.preventDefault()
+    
+    try {
+      // Validate input
+      if (!newChildData.name || !newChildData.age) {
+        // Display validation error
+        return
+      }
+      
+      // Create the child profile
+      const childProfile = await childProfileService.createChildProfile({
+        parentId: user.$id,
+        name: newChildData.name,
+        age: parseInt(newChildData.age),
+        gender: newChildData.gender || null,
+        notes: newChildData.notes || null
+      })
+      
+      // Add to state and reset form
+      setChildProfiles(prevProfiles => [childProfile, ...prevProfiles])
+      setNewChildData({
+        name: '',
+        age: '',
+        gender: '',
+        notes: ''
+      })
+      
+      // Close modal
+      setShowAddChildModal(false)
+    } catch (error) {
+      console.error('Error adding child profile:', error)
+    }
+  }
+  
+  // Handle starting a session with a specific child
+  const handleStartChildSession = async (childId, childName) => {
+    setIsCreatingSession(true)
+    
+    try {
+      const session = await sessionService.createSession(user.$id, childName)
+      
+      // Update child profile with new session
+      await childProfileService.updateSessionCount(childId, session.$id)
+      
+      // Navigate to the child session
+      navigate(`/child-session/${session.$id}`)
+    } catch (error) {
+      console.error('Error starting child session:', error)
+      setIsCreatingSession(false)
+    }
+  }
 
   const handleAnalyzeSession = async (session) => {
     setSelectedSession(session)
@@ -214,31 +286,7 @@ For more information, visit: https://earlymind.com
     }
   }
 
-  const handleStartSession = async () => {
-    if (!user) {
-      console.error('No user found');
-      return;
-    }
-
-    setIsCreatingSession(true);
-    
-    try {
-      // Create a new chat session
-      const session = await sessionService.createSession(
-        user.$id,
-        null // Child name - can be added later or from user preferences
-      );
-      
-      // Navigate to child session page with the session ID
-      navigate(`/child-session/${session.$id}`);
-      
-    } catch (error) {
-      console.error('Error creating session:', error);
-      alert('Failed to start session. Please try again.');
-    } finally {
-      setIsCreatingSession(false);
-    }
-  }
+  // We've removed the generic session function as all sessions must have a child profile
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -278,7 +326,7 @@ For more information, visit: https://earlymind.com
         {(activeTab === 'dashboard' || !activeTab) && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h3 className="text-lg font-medium text-gray-800 mb-4">Welcome, {user?.name || 'Parent'}!</h3>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-4">
               Manage your children's profiles, view recent activities, and customize your app preferences.
             </p>
           </div>
@@ -391,64 +439,108 @@ For more information, visit: https://earlymind.com
             <div className="bg-earlymind-yellow text-white py-3 px-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-medium text-lg">Child Profiles</h3>
-                <button className="bg-white text-earlymind-yellow rounded-full h-6 w-6 flex items-center justify-center">
-                  <span className="text-xl font-bold leading-none">+</span>
+                <button 
+                  onClick={() => setShowAddChildModal(true)}
+                  className="bg-white text-earlymind-yellow rounded-full h-7 w-7 flex items-center justify-center hover:bg-gray-100 transition-colors shadow-sm"
+                  title="Add new child profile"
+                >
+                  <Plus className="h-5 w-5" />
                 </button>
               </div>
             </div>
             
+            {/* Always show an "Add Child" button at the top of the profiles list */}
+            <div className="px-4 pt-4 pb-2">
+              <button 
+                onClick={() => setShowAddChildModal(true)} 
+                className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-300 rounded-md hover:border-earlymind-teal hover:bg-gray-50 transition-colors text-sm text-gray-600 hover:text-earlymind-teal"
+              >
+                <Plus className="h-4 w-4" /> Add New Child Profile
+              </button>
+            </div>
+            
             <div className="p-4">
-              {/* Placeholder for no children - Hidden for now to show example profile */}
-              <div className="hidden text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
-                <User className="h-12 w-12 mx-auto text-gray-300 mb-2" />
-                <p className="text-gray-500">No child profiles yet</p>
-                <button className="mt-3 px-4 py-2 bg-earlymind-yellow text-white rounded-md text-sm hover:bg-earlymind-yellow-dark transition-colors">
-                  Add Child Profile
-                </button>
-              </div>
-              
-              {/* Example Child Profile Card - Visible for testing */}
-              <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
-                <div className="flex items-center p-3 border-b border-gray-100">
-                  <div className="bg-earlymind-teal-lighter/20 rounded-full h-10 w-10 flex items-center justify-center mr-3">
-                    <span className="text-earlymind-teal font-bold">S</span>
-                  </div>
+              {/* No children placeholder */}
+              {loadingProfiles ? (
+                <div className="py-8 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-earlymind-teal"></div>
+                </div>
+              ) : childProfiles.length === 0 ? (
+                <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                  <User className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                  <p className="text-gray-500 mb-4">No child profiles yet</p>
                   <div>
-                    <h4 className="font-medium">Sarah</h4>
-                    <p className="text-xs text-gray-500">Age: 4 years</p>
-                  </div>
-                </div>
-                <div className="p-3 text-sm">
-                  <div className="flex justify-between mb-1">
-                    <span>Development Score:</span>
-                    <span className="font-medium">87/100</span>
-                  </div>
-                  <div className="flex justify-between mb-1">
-                    <span>Activities Completed:</span>
-                    <span className="font-medium">12</span>
-                  </div>
-                  <div className="flex justify-between mb-3">
-                    <span>Next Assessment:</span>
-                    <span className="font-medium">Oct 20</span>
-                  </div>
-                  <div className="space-y-2">
                     <button 
-                      onClick={handleStartSession}
-                      disabled={isCreatingSession}
-                      className={`w-full mt-1 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center ${
-                        isCreatingSession 
-                          ? 'bg-gray-400 text-white cursor-not-allowed'
-                          : 'bg-earlymind-yellow text-white hover:bg-earlymind-yellow-dark'
-                      }`}
+                      onClick={() => setShowAddChildModal(true)}
+                      className="px-6 py-2.5 bg-earlymind-yellow text-white rounded-md font-medium hover:bg-earlymind-yellow-dark transition-colors shadow-sm"
                     >
-                      {isCreatingSession ? 'Starting Session...' : 'Start Session'}
+                      Add Child Profile
                     </button>
-                    <button className="w-full px-3 py-2 bg-earlymind-teal-lighter/20 text-earlymind-teal rounded text-sm hover:bg-earlymind-teal-lighter/30 transition-colors">
-                      View Profile
-                    </button>
+                    <p className="text-xs text-gray-400 mt-3">A child profile is required to start a session</p>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  {childProfiles.map(child => (
+                    <div key={child.$id} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="flex items-center p-3 border-b border-gray-100">
+                        <div className="bg-earlymind-teal-lighter/20 rounded-full h-10 w-10 flex items-center justify-center mr-3">
+                          <span className="text-earlymind-teal font-bold">{child.name.charAt(0)}</span>
+                        </div>
+                        <div>
+                          <h4 className="font-medium">{child.name}</h4>
+                          <p className="text-xs text-gray-500">Age: {child.age} years</p>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 text-sm">
+                        <div className="flex justify-between mb-1">
+                          <span>Sessions Completed:</span>
+                          <span className="font-medium">{child.sessions_count || 0}</span>
+                        </div>
+                        <div className="flex justify-between mb-3">
+                          <span>Last Session:</span>
+                          <span className="font-medium">
+                            {child.last_session ? new Date(child.updated_at).toLocaleDateString() : 'None'}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <button 
+                            onClick={() => handleStartChildSession(child.$id, child.name)}
+                            disabled={isCreatingSession}
+                            className={`w-full mt-1 px-3 py-3 rounded-md font-medium transition-colors flex items-center justify-center shadow-sm ${
+                              isCreatingSession 
+                                ? 'bg-gray-400 text-white cursor-not-allowed'
+                                : 'bg-earlymind-yellow text-white hover:bg-earlymind-yellow-dark'
+                            }`}
+                          >
+                            {isCreatingSession ? (
+                              <div className="flex items-center">
+                                <div className="animate-spin h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
+                                <span>Starting...</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center">
+                                <span className="mr-2 text-xl">👋</span>
+                                <span>Start Session with {child.name}</span>
+                              </div>
+                            )}
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setSelectedChild(child)
+                              // Show edit modal or navigate to detailed profile view
+                            }}
+                            className="w-full px-3 py-2 bg-earlymind-teal-lighter/20 text-earlymind-teal rounded text-sm hover:bg-earlymind-teal-lighter/30 transition-colors"
+                          >
+                            View Profile
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           
@@ -802,6 +894,106 @@ For more information, visit: https://earlymind.com
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Child Profile Modal */}
+      {showAddChildModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full overflow-hidden">
+            <div className="bg-earlymind-teal text-white px-4 py-3 flex justify-between items-center">
+              <h3 className="font-medium text-lg">Add Child Profile</h3>
+              <button 
+                onClick={() => setShowAddChildModal(false)}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddChild} className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="childName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Child's Name
+                  </label>
+                  <input
+                    type="text"
+                    id="childName"
+                    value={newChildData.name}
+                    onChange={(e) => setNewChildData({...newChildData, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-earlymind-teal focus:border-transparent"
+                    placeholder="Enter child's name"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="childAge" className="block text-sm font-medium text-gray-700 mb-1">
+                    Age
+                  </label>
+                  <input
+                    type="number"
+                    id="childAge"
+                    min="0"
+                    max="18"
+                    value={newChildData.age}
+                    onChange={(e) => setNewChildData({...newChildData, age: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-earlymind-teal focus:border-transparent"
+                    placeholder="Enter child's age"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="childGender" className="block text-sm font-medium text-gray-700 mb-1">
+                    Gender (Optional)
+                  </label>
+                  <select
+                    id="childGender"
+                    value={newChildData.gender}
+                    onChange={(e) => setNewChildData({...newChildData, gender: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-earlymind-teal focus:border-transparent"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label htmlFor="childNotes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    id="childNotes"
+                    rows="3"
+                    value={newChildData.notes}
+                    onChange={(e) => setNewChildData({...newChildData, notes: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-earlymind-teal focus:border-transparent"
+                    placeholder="Add any notes about your child (e.g., preferences, needs, interests)"
+                  ></textarea>
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddChildModal(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-earlymind-yellow text-white rounded-md hover:bg-earlymind-yellow-dark transition-colors"
+                  >
+                    Add Profile
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}
